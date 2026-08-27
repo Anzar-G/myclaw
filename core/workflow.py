@@ -22,16 +22,24 @@ class WorkflowRunner:
             ]),
         }
 
-    async def run(self, name: str) -> list[dict[str, Any]]:
+    async def run(self, name: str, checkpoint=None) -> list[dict[str, Any]]:
         workflow = self.workflows.get(name.casefold())
         if not workflow:
             raise ValueError(f"Workflow tidak ditemukan: {name}")
         results = []
         for index, step in enumerate(workflow.steps, 1):
             tool_name = step["tool"]
+            if checkpoint is not None:
+                allowed = await checkpoint(index, step, results)
+                if not allowed:
+                    results.append({"step": index, "tool": tool_name, "success": False,
+                                    "message": "Workflow dihentikan di checkpoint sebelum langkah ini.",
+                                    "checkpoint": "rejected"})
+                    break
             try:
                 result = await self.registry.get_tool(tool_name).safe_execute(**step.get("params", {}))
-                results.append({"step": index, "tool": tool_name, "success": result.success, "message": result.message, "data": result.data})
+                results.append({"step": index, "tool": tool_name, "success": result.success, "message": result.message, "data": result.data,
+                                "checkpoint": "passed" if result.success else "failed"})
                 if not result.success:
                     break
             except Exception as exc:

@@ -21,6 +21,13 @@ class Scheduler:
                 "due": (datetime.now(timezone.utc) + timedelta(minutes=minutes)).isoformat()}
         self.items.append(item); self._save(); return item
 
+    def add_every(self, chat_id, message, minutes):
+        minutes = max(1, int(minutes))
+        item = {"id": uuid.uuid4().hex[:8], "chat_id": chat_id, "message": message,
+                "interval_minutes": minutes,
+                "due": (datetime.now(timezone.utc) + timedelta(minutes=minutes)).isoformat()}
+        self.items.append(item); self._save(); return item
+
     def cancel(self, item_id):
         before = len(self.items); self.items = [x for x in self.items if x["id"] != item_id]
         self._save(); return len(self.items) < before
@@ -40,8 +47,12 @@ class Scheduler:
                 if datetime.fromisoformat(item["due"]) <= now: due.append(item)
                 else: pending.append(item)
             if due:
-                self.items = pending; self._save()
+                recurring = []
                 for item in due:
                     try: await self.callback(item["chat_id"], item["message"], item["id"])
                     except Exception: pass
+                    if item.get("interval_minutes"):
+                        item["due"] = (now + timedelta(minutes=int(item["interval_minutes"]))).isoformat()
+                        recurring.append(item)
+                self.items = pending + recurring; self._save()
             await asyncio.sleep(5)

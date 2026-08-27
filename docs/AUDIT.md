@@ -1,5 +1,16 @@
 # MyClaw audit — 2026-08-27
 
+## PRD execution update — 2026-08-28
+
+- Live view now serves a mobile-compatible HTML page that polls authenticated JPEG frames; the legacy MJPEG endpoint remains at `/stream`.
+- Secure bind defaults to `127.0.0.1`. If Tailscale is installed and connected, the service automatically binds to its private IPv4 after restart; no public port-forwarding is required.
+- Added `scripts/check_remote_control.py` and `deploy/REMOTE_CONTROL.md` for Tailscale + macOS Screen Sharing readiness.
+- Added `/log` to expose a redacted tail of the audit log to the authorized Telegram chat, and execution events are now recorded there.
+- Added persistent recurring reminders through `/schedule_every <menit> <pesan>`; recurring entries survive restart and can be cancelled with `/cancel_schedule`.
+- Workflow steps now expose explicit checkpoint states (`passed`, `failed`, `rejected`) and stop safely after a failed/rejected checkpoint.
+- AppleScript string parameters for app/window activation and Finder trash actions are now escaped before interpolation; arbitrary custom AppleScript remains approval-gated.
+- The Telegram LaunchAgent was restarted and is running; local live-view health and authenticated HTML endpoint checks pass.
+
 ## Scope
 
 Static review of the Python modules, import/startup smoke tests, tool registration, approval policy, and macOS automation boundaries. No destructive tool was executed.

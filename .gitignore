@@ -6,6 +6,8 @@ tools/data/whatsapp_session/
 # Generated application state
 data/*.json
 data/*.png
+data/live_view_token
+archive/
 logs/
 *.log
 __pycache__/

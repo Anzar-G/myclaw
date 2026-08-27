@@ -21,6 +21,7 @@ from memory.conversation_store import ConversationStore
 from core.scheduler import Scheduler
 from core.workflow import WorkflowRunner
 from core.live_view import LiveView
+from config.logging_config import structured_logger
 
 class PendingApproval:
     def __init__(self, action_id: str, tool_name: str, params: Dict[str, Any],
@@ -78,12 +79,14 @@ class TelegramAgentBot:
         self.application.add_handler(
             CommandHandler("schedule", self._schedule_command)
         )
+        self.application.add_handler(CommandHandler("schedule_every", self._schedule_every_command))
         self.application.add_handler(
             CommandHandler("schedules", self._schedules_command)
         )
         self.application.add_handler(
             CommandHandler("cancel_schedule", self._cancel_schedule_command)
         )
+        self.application.add_handler(CommandHandler("log", self._log_command))
         self.application.add_handler(
             MessageHandler(
                 filters.TEXT & ~filters.COMMAND & filters.Chat(chat_id=self.allowed_chat_id),
@@ -98,8 +101,32 @@ class TelegramAgentBot:
     async def _post_init(self, application):
         await self.scheduler.start()
         import uvicorn
-        config = uvicorn.Config(self.live_view.app, host=settings.live_view_bind, port=8765, log_level="warning")
+        self._live_bind_host = self._resolve_live_bind()
+        config = uvicorn.Config(self.live_view.app, host=self._live_bind_host, port=8765, log_level="warning")
         self._live_server_task = asyncio.create_task(uvicorn.Server(config).serve())
+
+    @staticmethod
+    def _resolve_live_bind() -> str:
+        """Prefer the private Tailscale interface when it is installed.
+
+        The secure default remains localhost.  A user-provided LIVE_VIEW_BIND
+        is respected (for example an explicitly chosen LAN/Tailscale address).
+        """
+        configured = os.getenv("LIVE_VIEW_BIND", "").strip()
+        if configured:
+            return settings.live_view_bind
+        try:
+            probe = subprocess.run(
+                ["tailscale", "ip", "-4"], capture_output=True, text=True,
+                timeout=3, check=False,
+            )
+            for line in probe.stdout.splitlines():
+                candidate = line.strip()
+                if candidate and not candidate.startswith("127."):
+                    return candidate
+        except (OSError, subprocess.SubprocessError):
+            pass
+        return settings.live_view_bind
 
     async def _post_shutdown(self, application):
         await self.scheduler.stop()
@@ -108,11 +135,12 @@ class TelegramAgentBot:
     async def _live_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         if update.effective_chat.id != self.allowed_chat_id: return
         import socket
-        reachable_host = "127.0.0.1"
+        bind_host = getattr(self, "_live_bind_host", settings.live_view_bind)
+        reachable_host = bind_host if bind_host not in ("0.0.0.0", "127.0.0.1", "localhost") else "127.0.0.1"
         for interface in ("en0", "en1"):
             probe = subprocess.run(["/usr/sbin/ipconfig", "getifaddr", interface], capture_output=True, text=True)
             candidate = probe.stdout.strip()
-            if candidate and not candidate.startswith("127."):
+            if reachable_host == "127.0.0.1" and candidate and not candidate.startswith("127.") and bind_host == "0.0.0.0":
                 reachable_host = candidate
                 break
         if reachable_host == "127.0.0.1":
@@ -135,13 +163,20 @@ class TelegramAgentBot:
         item = self.scheduler.add(update.effective_chat.id, "⏰ " + text.split(" ", 1)[1], int(context.args[0]))
         await update.message.reply_text(f"Pengingat dibuat: {item['id']} (dalam {context.args[0]} menit)")
 
+    async def _schedule_every_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        if update.effective_chat.id != self.allowed_chat_id: return
+        if len(context.args) < 2 or not context.args[0].isdigit():
+            await update.message.reply_text("Format: /schedule_every <menit> <pesan>"); return
+        item = self.scheduler.add_every(update.effective_chat.id, "🔁 " + " ".join(context.args[1:]), int(context.args[0]))
+        await update.message.reply_text(f"Pengingat berulang dibuat: {item['id']} (setiap {context.args[0]} menit)")
+
     async def _help_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         if update.effective_chat.id != self.allowed_chat_id: return
         await update.message.reply_text(
             "MyClaw siap menerima bahasa natural.\n\n"
             "Contoh: Status Mac, Cek baterai, Buka YouTube di Arc, "
             "Ambil screenshot dan kirim, Lihat isi folder ~/Desktop.\n\n"
-            "Scheduler: /schedule <menit> <pesan>, /schedules, /cancel_schedule <id>"
+            "Scheduler: /schedule <menit> <pesan>, /schedule_every <menit> <pesan>, /schedules, /cancel_schedule <id>. Audit: /log"
         )
 
     async def _status_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -217,6 +252,19 @@ class TelegramAgentBot:
     async def _cancel_schedule_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         ok = bool(context.args) and self.scheduler.cancel(context.args[0])
         await update.message.reply_text("Pengingat dibatalkan." if ok else "ID pengingat tidak ditemukan.")
+
+    async def _log_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        if update.effective_chat.id != self.allowed_chat_id: return
+        path = os.path.join(settings.log_dir, "audit.log")
+        try:
+            with open(path, encoding="utf-8") as handle:
+                lines = handle.readlines()[-20:]
+        except OSError:
+            lines = []
+        if not lines:
+            await update.message.reply_text("Belum ada aktivitas di audit log.")
+            return
+        await update.message.reply_text("🧾 Audit log terbaru:\n" + _redact_sensitive("".join(lines))[-3500:])
 
     async def _send_scheduled_message(self, chat_id, message, item_id):
         await self.application.bot.send_message(chat_id=chat_id, text=message)
@@ -387,6 +435,7 @@ Approve? (5 minute timeout)
             
             # Await the execution of the tool
             result: ToolResult = await tool.safe_execute(**params)
+            structured_logger.log_execution(tool_name, params, {"success": result.success})
 
             # Check if result data contains a file path to send
             if result.success and isinstance(result.data, dict) and result.data.get("type") == "file":

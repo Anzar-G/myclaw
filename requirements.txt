@@ -16,5 +16,6 @@ pynput
 pyautogui
 Pillow
 fastapi
+uvicorn
 py-applescript
 selenium

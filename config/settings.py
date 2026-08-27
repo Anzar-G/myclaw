@@ -39,7 +39,7 @@ class Settings:
     google_client_id: str = os.getenv("GOOGLE_CLIENT_ID", "")
     approval_timeout: int = _env_int("APPROVAL_TIMEOUT", 300)
     live_view_token: str = os.getenv("LIVE_VIEW_TOKEN", "")
-    live_view_bind: str = os.getenv("LIVE_VIEW_BIND", "0.0.0.0")
+    live_view_bind: str = os.getenv("LIVE_VIEW_BIND", "127.0.0.1")
     
     def __post_init__(self):
         self.data_dir = os.path.join(self.base_dir, "data")

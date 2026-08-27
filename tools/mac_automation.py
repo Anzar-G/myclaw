@@ -9,6 +9,10 @@ from difflib import SequenceMatcher
 import re
 from config.macos_permissions import require_accessibility, automation_permission_hint
 
+def _as_quote(value: str) -> str:
+    """Safely quote a string literal for AppleScript source."""
+    return '"' + str(value).replace("\\", "\\\\").replace('"', '\\"').replace("\r", "\\r").replace("\n", "\\n") + '"'
+
 
 def _run_osascript(script: str, target: str = "System Events") -> str:
     result = subprocess.run(["osascript", "-e", script], capture_output=True, text=True)
@@ -89,7 +93,7 @@ class CloseMacAppTool(BaseTool):
     
     async def execute(self, app_name: str) -> str:
         resolved = _resolve_app_name(app_name)
-        script = f'tell application "{resolved}" to quit'
+        script = f'tell application {_as_quote(resolved)} to quit'
         _run_osascript(script, resolved)
         return f"Berhasil menutup aplikasi: {resolved}"
 
@@ -162,7 +166,7 @@ class ToggleBluetoothTool(BaseTool):
     async def execute(self, state: str) -> str:
         # Bluetooth is tricky on macOS without blueutil. We'll try AppleScript on System Settings.
         state_bool = "true" if state == "on" else "false"
-        script = f'tell application "System Events" to tell process "ControlCenter" to click checkbox "Bluetooth" of group 1 of window 1'
+        script = 'tell application "System Events" to tell process "ControlCenter" to click checkbox "Bluetooth" of group 1 of window 1'
         # This is very UI dependent. For now, we'll provide a placeholder or use blueutil if available.
         return "Fitur Bluetooth Toggle sedang dalam pengembangan (membutuhkan blueutil atau akses UI khusus)."
 
@@ -171,7 +175,7 @@ class MinimizeAppTool(BaseTool):
     description = "Meminimalkan (minimize) semua jendela aplikasi tertentu. Params: app_name"
     category = ToolCategory.SYSTEM
     async def execute(self, app_name: str) -> str:
-        script = f'tell application "System Events" to set miniaturized of every window of process "{app_name}" to true'
+        script = f'tell application "System Events" to set miniaturized of every window of process {_as_quote(app_name)} to true'
         require_accessibility()
         _run_osascript(script)
         return f"Jendela {app_name} telah diminimalkan."
@@ -181,7 +185,7 @@ class MaximizeAppTool(BaseTool):
     description = "Memaksimalkan (zoom/maximize) jendela aplikasi tertentu. Params: app_name"
     category = ToolCategory.SYSTEM
     async def execute(self, app_name: str) -> str:
-        script = f'tell application "System Events" to set zoomed of window 1 of process "{app_name}" to true'
+        script = f'tell application "System Events" to set zoomed of window 1 of process {_as_quote(app_name)} to true'
         require_accessibility()
         _run_osascript(script)
         return f"Jendela {app_name} telah dimaksimalkan."
@@ -234,7 +238,7 @@ class ScreenshotTool(BaseTool):
     async def execute(self, path: str = "screenshot.png", app_name: str = "") -> dict:
         import time
         if app_name:
-            script = f'tell application "{app_name}" to activate'
+            script = f'tell application {_as_quote(app_name)} to activate'
             subprocess.run(["osascript", "-e", script])
             time.sleep(1) # Tunggu animasi aplikasi muncul ke depan
             
@@ -252,7 +256,7 @@ class SwitchAppTool(BaseTool):
     description = "Berpindah ke aplikasi tertentu yang sedang berjalan. Params: app_name"
     category = ToolCategory.SYSTEM
     async def execute(self, app_name: str) -> str:
-        script = f'tell application "{app_name}" to activate'
+        script = f'tell application {_as_quote(app_name)} to activate'
         _run_osascript(script, app_name)
         return f"Berpindah ke aplikasi {app_name}"
 
@@ -271,7 +275,7 @@ class SendAppToTrashTool(BaseTool):
     description = "Memindahkan file atau folder ke Trash. Params: path"
     category = ToolCategory.FILE
     async def execute(self, path: str) -> str:
-        script = f'tell application "Finder" to delete POSIX file "{path}"'
+        script = f'tell application "Finder" to delete POSIX file {_as_quote(path)}'
         _run_osascript(script, "Finder")
         return f"File {path} telah dipindahkan ke Trash."
 
