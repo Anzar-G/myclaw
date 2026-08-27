@@ -1,0 +1,17 @@
+# Secrets and local credentials
+.env
+data/gmail_credentials/
+tools/data/whatsapp_session/
+
+# Generated application state
+data/*.json
+data/*.png
+logs/
+*.log
+__pycache__/
+*.py[cod]
+
+# Local environments and IDE files
+venv/
+.idea/
+.DS_Store

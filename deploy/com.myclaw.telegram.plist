@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.myclaw.telegram</string>
+    <key>ProgramArguments</key>
+    <array>
+        <string>/Users/muhammadnizaralfaris/Documents/MyClaw copy/venv/bin/python</string>
+        <string>/Users/muhammadnizaralfaris/Documents/MyClaw copy/run_telegram_bot.py</string>
+    </array>
+    <key>WorkingDirectory</key>
+    <string>/Users/muhammadnizaralfaris/Documents/MyClaw copy</string>
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>PYTHONPATH</key>
+        <string>/Users/muhammadnizaralfaris/Documents/MyClaw copy</string>
+        <key>PYTHONUNBUFFERED</key>
+        <string>1</string>
+    </dict>
+    <key>RunAtLoad</key>
+    <true/>
+    <key>KeepAlive</key>
+    <true/>
+    <key>ProcessType</key>
+    <string>Interactive</string>
+    <key>StandardOutPath</key>
+    <string>/Users/muhammadnizaralfaris/Documents/MyClaw copy/logs/launchd-telegram.stdout.log</string>
+    <key>StandardErrorPath</key>
+    <string>/Users/muhammadnizaralfaris/Documents/MyClaw copy/logs/launchd-telegram.stderr.log</string>
+</dict>
+</plist>
